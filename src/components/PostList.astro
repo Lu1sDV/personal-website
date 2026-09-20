@@ -1,0 +1,53 @@
+---
+import type { BlogPost } from '../lib/posts';
+import { withBase } from '../lib/urls';
+
+interface Props {
+  posts: BlogPost[];
+  grouped?: boolean;
+}
+
+const { posts, grouped = false } = Astro.props;
+const groups = grouped
+  ? Array.from(Map.groupBy(posts, (post) => post.data.pubDate.getUTCFullYear()))
+  : [[null, posts] as const];
+const dateFormat = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
+---
+
+{posts.length === 0 ? (
+  <div class="empty-state">
+    <p>Nothing published just yet.</p>
+    <p>This notebook is open. The first entries will appear here when they’re ready.</p>
+  </div>
+) : (
+  <div class:list={['post-list', { 'post-list-grouped': grouped }]}>
+    {groups.map(([year, entries]) => (
+      <div class:list={['post-group', { 'year-group': grouped }]}>
+        {grouped && (
+          <>
+            <h2 class="sr-only">{year}</h2>
+            <span class="ghost-year" aria-hidden="true">{year}</span>
+          </>
+        )}
+        <ul class="writing-list">
+          {entries.map((post) => (
+            <li>
+              <a class="writing-link" href={withBase(`posts/${post.id}/`)}>
+                <span class="writing-title">
+                  {post.data.title}
+                  {post.data.draft && <span class="draft-label">Draft</span>}
+                </span>
+                <time datetime={post.data.pubDate.toISOString()}>{dateFormat.format(post.data.pubDate)}</time>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </div>
+)}

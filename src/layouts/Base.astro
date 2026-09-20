@@ -1,0 +1,75 @@
+---
+import Header from '../components/Header.astro';
+import interFont from '../assets/InterVariable.woff2';
+import { site } from '../site';
+import { withBase } from '../lib/urls';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  publishedTime?: string;
+  noindex?: boolean;
+  wide?: boolean;
+}
+
+const {
+  title,
+  description = site.description,
+  publishedTime,
+  noindex = false,
+  wide = false,
+} = Astro.props;
+const pageTitle = title ? `${title} · ${site.title}` : site.title;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script is:inline>
+      try {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    {!noindex && <link rel="canonical" href={canonical} />}
+    <link rel="icon" type="image/svg+xml" href={withBase('favicon.svg')} />
+    <script is:inline>
+      // Prefetch internal links on hover/focus intent. Verified in Chromium and Firefox;
+      // degrades to normal navigation in Safari.
+      const prefetch = (e) => {
+        const a = e.target.closest('a[href^="/"]');
+        if (!a || a.dataset.pf) return;
+        a.dataset.pf = '1';
+        const l = document.createElement('link');
+        l.rel = 'prefetch';
+        l.href = a.href;
+        document.head.append(l);
+      };
+      addEventListener('pointerover', prefetch, { passive: true });
+      addEventListener('focusin', prefetch, { passive: true });
+    </script>
+    <link rel="preload" href={interFont} as="font" type="font/woff2" crossorigin />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <meta property="og:site_name" content={site.title} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={publishedTime ? 'article' : 'website'} />
+    <meta property="og:url" content={canonical} />
+    {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <Header />
+    <main id="main-content" class:list={['site-main', wide && 'site-main--wide']} tabindex="-1"><slot /></main>
+    <script>
+      import '../scripts/theme';
+    </script>
+  </body>
+</html>

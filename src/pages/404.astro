@@ -1,0 +1,10 @@
+---
+import Base from '../layouts/Base.astro';
+import { withBase } from '../lib/urls';
+---
+
+<Base title="Page not found" description="This page could not be found. Return to the notebook or browse the writing archive." noindex>
+  <h1 class="page-heading">Nothing here.</h1>
+  <p class="lede">This address doesn't lead to a page. It may have moved, or the link may be incomplete.</p>
+  <p>Try <a href={withBase()}>Home</a> or browse the <a href={withBase('posts/')}>Blog</a>.</p>
+</Base>

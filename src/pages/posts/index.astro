@@ -1,0 +1,18 @@
+---
+import PostList from '../../components/PostList.astro';
+import Base from '../../layouts/Base.astro';
+import { getPosts } from '../../lib/posts';
+
+const posts = await getPosts();
+---
+
+<Base title="Blog" description="Notes on building things, learning, and the details worth keeping. Collected over time.">
+  <h1 class="page-heading">Blog</h1>
+  <p class="lede">Notes, collected over time.</p>
+  <PostList posts={posts} grouped />
+</Base>
+
+<style>
+  .page-heading, .lede { text-align: center; }
+  .lede { margin-inline: auto; }
+</style>

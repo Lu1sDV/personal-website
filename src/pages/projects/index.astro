@@ -1,0 +1,89 @@
+---
+import Base from '../../layouts/Base.astro';
+import { withBase } from '../../lib/urls';
+import { Image } from 'astro:assets';
+import skillsmdIcon from '../../assets/skillsmd.png';
+
+// Layout follows antfu.me/projects: 3-column card grid, 48px icon, title + description.
+const projects = [
+  {
+    name: 'personal-website',
+    description: 'This website. Notes on cybersecurity and computer science, kept plain and fast.',
+    meta: 'Astro · TypeScript · CSS',
+    href: 'https://github.com/Lu1sDV/personal-website',
+    icon: 'notebook',
+    id: 'personal-website',
+  },
+  {
+    name: 'wafme0w',
+    description: 'Blazing-fast, lightweight, AI-assisted WAF detector.',
+    meta: 'Go · 2022',
+    href: 'https://github.com/Lu1sDV/wafme0w',
+    icon: 'cat-wall',
+  },
+  {
+    name: 'obsidian-weaviate-embeddings',
+    description: 'Experimenting with vector databases and semantic search inside Obsidian.',
+    meta: 'TypeScript · 2026',
+    href: 'https://github.com/Lu1sDV/obsidian-weaviate-embeddings',
+    icon: 'graph',
+  },
+  {
+    name: 'skillsmd',
+    description: 'Personal SKILLS.md collection for agent workflows.',
+    meta: 'Markdown · 2026',
+    href: 'https://github.com/Lu1sDV/skillsmd',
+    iconImage: skillsmdIcon,
+  },
+  {
+    name: 'ctf_writeups',
+    description: 'Writeups for two nice CTF challenges.',
+    meta: 'C · 2024',
+    href: 'https://github.com/Lu1sDV/ctf_writeups',
+    icon: 'terminal',
+  },
+];
+---
+
+<Base title="Projects" description="Personal projects: security tooling, experiments, and writeups." wide>
+  <h1 class="page-heading">Projects</h1>
+  <p class="lede">Things I build, break, and write down.</p>
+
+  <div class="projects-grid">
+    {projects.map((p) => (
+      <a class="project-card" id={p.id} href={p.href}>
+        {p.icon === 'notebook' && (
+          <svg class="project-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="15" height="18" rx="2" /><path d="M9 3v18M3 7h4m-4 5h4m-4 5h4m6-10h4m-4 4h4" /></svg>
+        )}
+        {p.icon === 'cat-wall' && (
+          <svg class="project-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 12V9.6L6.9 7.2l3.2 1.5a5.4 5.4 0 0 1 3.8 0l3.2-1.5-1.1 2.4V12" />
+            <circle cx="10.5" cy="10.5" r=".75" fill="currentColor" stroke="none" />
+            <circle cx="13.5" cy="10.5" r=".75" fill="currentColor" stroke="none" />
+            <rect x="2.5" y="12" width="19" height="9" rx="1" />
+            <path d="M2.5 16.5h19M8.5 12v4.5M15.5 12v4.5M5.5 16.5V21M12 16.5V21M18.5 16.5V21" />
+          </svg>
+        )}
+        {p.icon === 'graph' && (
+          <svg class="project-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6.5" cy="7" r="2.4" /><circle cx="17.5" cy="8" r="2.4" /><circle cx="11" cy="17.5" r="2.4" /><path d="m8.8 7.4 6.4.4M7.6 9.2l2.3 6M16.6 10.2l-3.9 5.2" /></svg>
+        )}
+        {p.iconImage && (
+          <Image class="project-card-icon" src={p.iconImage} alt="" width={96} height={96} />
+        )}
+        {p.icon === 'terminal' && (
+          <svg class="project-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4.5" width="16" height="15" rx="2" /><path d="m7.5 10 2.5 2-2.5 2M12.5 14.5h4" /></svg>
+        )}
+        <div>
+          <h2 class="project-card-title">{p.name}</h2>
+          <p class="project-card-description">{p.description}</p>
+          <p class="project-card-meta">{p.meta}</p>
+        </div>
+      </a>
+    ))}
+  </div>
+</Base>
+
+<style>
+  .page-heading, .lede { text-align: center; }
+  .lede { margin-inline: auto; }
+</style>
