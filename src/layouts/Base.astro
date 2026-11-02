@@ -23,8 +23,9 @@ const {
 } = Astro.props;
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
-// Article pages: no textbook-network pass, so nothing looks generated behind the prose.
-const isPost = Astro.url.pathname.includes('/posts/');
+// Article pages: no textbook-network pass, so nothing looks generated behind the prose, and the
+// wave is dimmed behind the text column. Dashboard and Projects keep the grid unobstructed.
+const isPost = Astro.url.pathname.includes('/posts');
 ---
 
 <!doctype html>
@@ -68,7 +69,7 @@ const isPost = Astro.url.pathname.includes('/posts/');
     <meta name="twitter:card" content="summary" />
   </head>
   <body>
-    <ForwardPass classic={!isPost} />
+    <ForwardPass classic={!isPost} shaded={isPost} />
     <a class="skip-link" href="#main-content">Skip to content</a>
     <Header />
     <main id="main-content" class:list={['site-main', wide && 'site-main--wide']} tabindex="-1"><slot /></main>

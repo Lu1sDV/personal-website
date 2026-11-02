@@ -5,10 +5,17 @@
 // behind the reading column so prose stays legible.
 interface Props {
   classic?: boolean;
+  shaded?: boolean;
 }
-const { classic = true } = Astro.props;
+const { classic = true, shaded = true } = Astro.props;
 ---
-<div class="fp" aria-hidden="true" transition:persist data-classic={classic ? undefined : 'off'}>
+<div
+  class="fp"
+  aria-hidden="true"
+  transition:persist
+  data-classic={classic ? undefined : 'off'}
+  data-shaded={shaded ? undefined : 'off'}
+>
   <canvas id="fp-grid"></canvas>
   <canvas id="fp-wave"></canvas>
 </div>
@@ -64,7 +71,8 @@ const { classic = true } = Astro.props;
     let classic = false;
     let b0 = 1, b1 = 0; // columns drawn by the free wave this frame
     const MASK_MIN = 0.08, MASK_RAMP = 40; // reading-column attenuation
-    let mx0 = -1e9, mx1 = 1e9;             // reading-column x-range (viewport px)
+    let mx0 = 0, mx1 = 0;                  // reading-column x-range (viewport px)
+    let maskOn = false;                    // dim the layer behind the column?
     const dirty: number[] = [];
 
     // Free pass state
@@ -202,15 +210,16 @@ const { classic = true } = Astro.props;
     // Reading column: the wave dims to MASK_MIN inside it and ramps back up over MASK_RAMP
     // pixels, so moving dots never sit at full brightness behind prose.
     function measureMask() {
-      const main = document.querySelector('.site-main');
-      if (!main) { mx0 = -1e9; mx1 = 1e9; return; }
+      maskOn = root?.dataset.shaded !== 'off';
+      const main = maskOn ? document.querySelector('.site-main') : null;
+      if (!main) { maskOn = false; return; }
       const r = main.getBoundingClientRect();
       mx0 = r.left; mx1 = r.right;
     }
 
     // Destination-out over the reading column: every layer dims there, dots and links alike.
     function dimColumn() {
-      if (mx1 <= mx0) return;
+      if (!maskOn || mx1 <= mx0) return;
       const a = 1 - MASK_MIN;
       c.globalAlpha = 1;
       c.globalCompositeOperation = 'destination-out';
