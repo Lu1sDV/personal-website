@@ -64,7 +64,8 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: radial-gradient(75% 42% at 50% 0%, var(--glow), transparent 72%), var(--background);
+  /* No opaque layer: the forward-pass canvas sits behind the body at z-index -1. */
+  background: radial-gradient(75% 42% at 50% 0%, var(--glow), transparent 72%);
   color: var(--body);
   font-size: 16px;
   line-height: 1.75;

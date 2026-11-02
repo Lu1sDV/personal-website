@@ -1,0 +1,387 @@
+---
+// Animated "forward pass" dot grid: red on black, canvas only, no dependencies.
+// Most passes are free-form; about 1 in 4 draws a textbook neural network instead.
+---
+<div class="fp" aria-hidden="true" transition:persist>
+  <canvas id="fp-grid"></canvas>
+  <canvas id="fp-wave"></canvas>
+</div>
+
+<style>
+  .fp {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100lvh;
+    z-index: -1;
+    pointer-events: none;
+    contain: strict;
+  }
+  .fp canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  @media print { .fp { display: none; } }
+</style>
+
+<script>
+  const S = 22;                    // grid spacing (px)
+  const L = 5;                     // free passes: one layer every 5 columns
+  const SPEED = 0.13;              // wavefront speed (px per ms)
+  const TAU = 750;                 // trail fade (ms)
+  const SIGMA = 16;                // wavefront width (px)
+  const REST = 1200;               // pause between passes (ms)
+  const GLOW = 130;                // cursor glow radius (px)
+  const FRAME_MS = 1000 / 30 - 2;  // 30 fps cap
+  const TRAIL = SPEED * TAU * 3;   // distance where the trail drops below 5%
+  const CLASSIC_CHANCE = 0.25;     // share of passes drawn as a textbook network
+  const HOLD = 900;                // classic: how long the finished network stays lit (ms)
+
+  const rnd = (n: number) => Math.floor(Math.random() * n);
+  const ease = (t: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 4);
+
+  function start(gc: HTMLCanvasElement, wc: HTMLCanvasElement) {
+    const g = gc.getContext('2d')!;
+    const c = wc.getContext('2d')!;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+
+    let W = 0, H = 0, D = 0, cols = 0, rows = 0, ox = 0, oy = 0;
+    let red = '#FF2D2D';
+    let t0 = 0, last = 0, raf = 0;
+    let mx = -1e4, my = -1e4;
+    let classic = false;
+    let b0 = 1, b1 = 0; // columns drawn by the free wave this frame
+    const dirty: number[] = [];
+
+    // Free pass state
+    let w = new Float32Array(0);
+    let top = new Int32Array(0);
+    let lastLayer = -1;
+    const links: { c: number; t: number }[] = [];
+
+    // Classic pass state
+    let lx = new Float32Array(0);
+    let nN = 0, nx = new Float32Array(0), ny = new Float32Array(0), act = new Float32Array(0);
+    let nE = 0, eg = new Uint8Array(0);
+    let ex1 = new Float32Array(0), ey1 = new Float32Array(0), ex2 = new Float32Array(0), ey2 = new Float32Array(0);
+    let es = new Float32Array(0), ea = new Float32Array(0), ep = new Float32Array(0);
+    let bx0 = 0, bx1 = 0, by0 = 0, by1 = 0;
+
+    // Free pass: new random "weights", stored column by column.
+    function reseed() {
+      const p0 = Math.random() * 6, p1 = Math.random() * 6, p2 = Math.random() * 6;
+      if (w.length !== cols * rows) w = new Float32Array(cols * rows);
+      for (let col = 0; col < cols; col++) {
+        const gain = col % L === 0 ? 1.6 : 0.6;
+        for (let r = 0; r < rows; r++) {
+          const v = (Math.sin(col * 0.7 + p0) + Math.sin(r * 0.9 + p1) + Math.sin((col + r) * 0.45 + p2) + 3) / 6;
+          w[col * rows + r] = v * v * v * (0.55 + Math.random() * 0.45) * gain;
+        }
+      }
+      const layers = Math.floor((cols - 1) / L) + 1;
+      top = new Int32Array(layers * 3);
+      for (let li = 0; li < layers; li++) {
+        const base = li * L * rows;
+        let a = -1, b = -1, d = -1;
+        for (let r = 0; r < rows; r++) {
+          const v = w[base + r];
+          if (a < 0 || v > w[base + a]) { d = b; b = a; a = r; }
+          else if (b < 0 || v > w[base + b]) { d = b; b = r; }
+          else if (d < 0 || v > w[base + d]) { d = r; }
+        }
+        top[li * 3] = a; top[li * 3 + 1] = b; top[li * 3 + 2] = d;
+      }
+      links.length = 0;
+      lastLayer = -1;
+    }
+
+    // Classic pass: a small layered network with a real forward pass.
+    function buildNet() {
+      const layers = Math.max(3, Math.min(7, Math.floor(cols / 7)));
+      const gapR = 2;
+      const maxN = Math.max(2, Math.min(8, Math.floor((rows - 3) / gapR) + 1));
+      const margin = Math.max(1, Math.round(cols * 0.12));
+      const span = Math.max(layers - 1, cols - 1 - 2 * margin);
+
+      const sizes: number[] = [];
+      for (let i = 0; i < layers; i++) {
+        const n = i === 0 ? 3 + rnd(3) : i === layers - 1 ? 2 + rnd(2) : 4 + rnd(4);
+        sizes.push(Math.min(n, maxN));
+      }
+
+      lx = new Float32Array(layers);
+      nN = sizes.reduce((a, b) => a + b, 0);
+      nx = new Float32Array(nN); ny = new Float32Array(nN); act = new Float32Array(nN);
+      const first = new Int32Array(layers);
+      let n = 0;
+      for (let i = 0; i < layers; i++) {
+        const col = Math.min(cols - 1, Math.round(margin + (span * i) / (layers - 1)));
+        lx[i] = ox + col * S;
+        first[i] = n;
+        const r0 = Math.round((rows - 1 - (sizes[i] - 1) * gapR) / 2);
+        for (let j = 0; j < sizes[i]; j++, n++) { nx[n] = lx[i]; ny[n] = oy + (r0 + j * gapR) * S; }
+      }
+
+      nE = 0;
+      for (let i = 0; i < layers - 1; i++) nE += sizes[i] * sizes[i + 1];
+      ex1 = new Float32Array(nE); ey1 = new Float32Array(nE); ex2 = new Float32Array(nE); ey2 = new Float32Array(nE);
+      es = new Float32Array(nE); ea = new Float32Array(nE); ep = new Float32Array(nE); eg = new Uint8Array(nE);
+
+      const raw = new Float32Array(nN);
+      for (let j = 0; j < sizes[0]; j++) raw[j] = 0.3 + Math.random() * 0.7;
+      let e = 0;
+      for (let i = 0; i < layers - 1; i++) {
+        const a0 = first[i], c0 = first[i + 1], e0 = e;
+        let m = 0;
+        for (let k = 0; k < sizes[i + 1]; k++) {
+          let z = Math.random() * 0.6 - 0.3; // bias
+          for (let j = 0; j < sizes[i]; j++, e++) {
+            const wt = Math.random() * 2 - 1;
+            z += wt * raw[a0 + j];
+            ex1[e] = nx[a0 + j]; ey1[e] = ny[a0 + j];
+            ex2[e] = nx[c0 + k]; ey2[e] = ny[c0 + k];
+            es[e] = Math.abs(wt) * raw[a0 + j];
+            eg[e] = i;
+            if (es[e] > m) m = es[e];
+          }
+          raw[c0 + k] = 1 / (1 + Math.exp(-1.5 * z)); // sigmoid
+        }
+        for (let q = e0; q < e; q++) es[q] /= m || 1;
+      }
+      for (let q = 0; q < nN; q++) act[q] = 0.15 + 0.85 * raw[q];
+
+      bx0 = lx[0]; bx1 = lx[layers - 1];
+      by0 = Infinity; by1 = -Infinity;
+      for (let q = 0; q < nN; q++) { by0 = Math.min(by0, ny[q]); by1 = Math.max(by1, ny[q]); }
+    }
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const nW = gc.clientWidth, nH = gc.clientHeight;
+      if (!nW || (nW === W && nH === H && dpr === D)) return;
+      W = nW; H = nH; D = dpr;
+      for (const [cv, ctx] of [[gc, g], [wc, c]] as const) {
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      const cs = getComputedStyle(document.documentElement);
+      red = cs.getPropertyValue('--fp-red').trim() || '#FF2D2D';
+      const gridColor = cs.getPropertyValue('--fp-grid').trim() || '#1E1E1E';
+      const nc = Math.max(2, Math.floor(W / S)), nr = Math.max(3, Math.floor(H / S));
+      const changed = nc !== cols || nr !== rows;
+      cols = nc; rows = nr;
+      ox = (W - (cols - 1) * S) / 2;
+      oy = (H - (rows - 1) * S) / 2;
+
+      // Static grid: drawn once, never touched per frame.
+      g.fillStyle = gridColor;
+      for (let col = 0; col < cols; col++)
+        for (let r = 0; r < rows; r++) g.fillRect(ox + col * S - 1, oy + r * S - 1, 2, 2);
+
+      dirty.length = 0;
+      if (changed) { reseed(); if (classic) buildNet(); t0 = performance.now(); }
+      if (reduce.matches) { classic = false; paint(W * 0.6, 0); }
+    }
+
+    const colGain = (dx: number) =>
+      dx < 0 ? Math.exp(-(dx * dx) / (SIGMA * SIGMA)) : Math.exp(-dx / (SPEED * TAU));
+
+    function dot(x: number, y: number, v: number) {
+      const s = 1 + v * 2;
+      c.globalAlpha = v;
+      c.fillRect(x - s, y - s, s * 2, s * 2);
+    }
+
+    function paintWave(fx: number, ts: number) {
+      const glow = mx > -1e3;
+      b0 = Math.max(0, Math.floor((fx - TRAIL - ox) / S));
+      b1 = Math.min(cols - 1, Math.ceil((fx + 2 * SIGMA - ox) / S));
+      for (let col = b0; col <= b1; col++) {
+        const x = ox + col * S, k = colGain(fx - x);
+        if (k < 0.02) continue;
+        const base = col * rows;
+        for (let r = 0; r < rows; r++) {
+          const y = oy + r * S;
+          let v = Math.min(1, w[base + r] * k);
+          if (glow) {
+            const q = Math.hypot(x - mx, y - my);
+            if (q < GLOW) v = Math.max(v, (1 - q / GLOW) ** 2);
+          }
+          if (v >= 0.02) dot(x, y, v);
+        }
+      }
+      if (b0 <= b1) {
+        const x0 = ox + b0 * S - 4, x1 = ox + Math.min(cols - 1, b1 + L) * S + 4;
+        dirty.push(x0, 0, x1 - x0, H);
+      }
+
+      const lc = Math.round((fx - ox) / S);
+      if (ts && lc >= 0 && lc % L === 0 && lc !== lastLayer && lc + L < cols) {
+        lastLayer = lc;
+        links.push({ c: lc, t: ts });
+      }
+      while (links.length && ts - links[0].t > 1600) links.shift();
+      for (const l of links) {
+        const age = (ts - l.t) / 1000, p = ease(age / 0.7), li = l.c / L;
+        const x1 = ox + l.c * S, x2 = ox + (l.c + L) * S;
+        c.globalAlpha = 0.5 * (1 - age / 1.6);
+        c.beginPath();
+        for (let i = 0; i < 3; i++)
+          for (let j = 0; j < 3; j++) {
+            const y1 = oy + top[li * 3 + i] * S, y2 = oy + top[(li + 1) * 3 + j] * S;
+            c.moveTo(x1, y1);
+            c.lineTo(x1 + (x2 - x1) * p, y1 + (y2 - y1) * p);
+          }
+        c.stroke();
+      }
+    }
+
+    function paintNet(fx: number, A: number) {
+      if (A < 0.01) return;
+
+      // Faint full wiring, one stroke.
+      c.globalAlpha = 0.07 * A;
+      c.beginPath();
+      for (let e = 0; e < nE; e++) { c.moveTo(ex1[e], ey1[e]); c.lineTo(ex2[e], ey2[e]); }
+      c.stroke();
+
+      // Signal traveling along the edges, batched into at most 5 strokes.
+      for (let e = 0; e < nE; e++) {
+        const xa = lx[eg[e]], xb = lx[eg[e] + 1], p = (fx - xa) / (xb - xa);
+        if (p <= 0) { ea[e] = 0; continue; }
+        const trace = p < 1 ? 1 : 0.3 + 0.7 * Math.exp(-(fx - xb) / (SPEED * TAU));
+        ea[e] = 0.5 * es[e] * trace * A;
+        ep[e] = Math.min(1, p);
+      }
+      for (let b = 1; b <= 5; b++) {
+        c.beginPath();
+        let any = false;
+        for (let e = 0; e < nE; e++) {
+          if (ea[e] < 0.02 || Math.ceil(ea[e] * 10) !== b) continue;
+          const p = ep[e];
+          c.moveTo(ex1[e], ey1[e]);
+          c.lineTo(ex1[e] + (ex2[e] - ex1[e]) * p, ey1[e] + (ey2[e] - ey1[e]) * p);
+          any = true;
+        }
+        if (any) { c.globalAlpha = b / 10; c.stroke(); }
+      }
+
+      // Neuron outlines, one stroke, then activations.
+      c.beginPath();
+      for (let q = 0; q < nN; q++) c.rect(nx[q] - 4.5, ny[q] - 4.5, 9, 9);
+      c.globalAlpha = 0.45 * A;
+      c.stroke();
+      for (let q = 0; q < nN; q++) {
+        const d = fx - nx[q];
+        if (d < 0) continue;
+        const v = Math.min(1, Math.max(act[q], Math.exp(-d / (SPEED * 220))));
+        const s = 1.5 + v * 2.5;
+        c.globalAlpha = v * A;
+        c.fillRect(nx[q] - s, ny[q] - s, s * 2, s * 2);
+      }
+      dirty.push(bx0 - 8, by0 - 8, bx1 - bx0 + 16, by1 - by0 + 16);
+    }
+
+    function paintGlow(fx: number) {
+      if (mx < -1e3) return;
+      const g0 = Math.max(0, Math.floor((mx - GLOW - ox) / S)), g1 = Math.min(cols - 1, Math.ceil((mx + GLOW - ox) / S));
+      const r0 = Math.max(0, Math.floor((my - GLOW - oy) / S)), r1 = Math.min(rows - 1, Math.ceil((my + GLOW - oy) / S));
+      for (let col = g0; col <= g1; col++) {
+        const x = ox + col * S;
+        if (col >= b0 && col <= b1 && colGain(fx - x) >= 0.02) continue;
+        for (let r = r0; r <= r1; r++) {
+          const y = oy + r * S, q = Math.hypot(x - mx, y - my);
+          if (q < GLOW) {
+            const v = (1 - q / GLOW) ** 2;
+            if (v >= 0.02) dot(x, y, v);
+          }
+        }
+      }
+      dirty.push(mx - GLOW - 4, my - GLOW - 4, GLOW * 2 + 8, GLOW * 2 + 8);
+    }
+
+    function paint(fx: number, ts: number, A = 1) {
+      for (let i = 0; i < dirty.length; i += 4) c.clearRect(dirty[i], dirty[i + 1], dirty[i + 2], dirty[i + 3]);
+      dirty.length = 0;
+      c.fillStyle = red;
+      c.strokeStyle = red;
+      c.lineWidth = 1;
+      if (!ts) links.length = 0;
+      if (classic) { b0 = 1; b1 = 0; paintNet(fx, A); }
+      else paintWave(fx, ts);
+      paintGlow(fx);
+      c.globalAlpha = 1;
+    }
+
+    function next(ts: number) {
+      classic = !classic && Math.random() < CLASSIC_CHANCE; // never two classic passes in a row
+      if (classic) buildNet(); else reseed();
+      t0 = ts + REST;
+      c.clearRect(0, 0, W, H);
+      dirty.length = 0;
+    }
+
+    function frame(ts: number) {
+      raf = requestAnimationFrame(frame);
+      if (ts - last < FRAME_MS) return;
+      last = ts;
+      if (classic) {
+        const fx = bx0 - 40 + (ts - t0) * SPEED;
+        let A = ease((ts - t0) / 600);
+        const after = (fx - bx1 - 60) / SPEED;
+        if (after > HOLD) A *= 1 - ease((after - HOLD) / 700);
+        if (after > HOLD + 700) return next(ts);
+        paint(fx, ts, A);
+      } else {
+        const fx = (ts - t0) * SPEED - 2 * SIGMA;
+        if (fx > W + TRAIL) return next(ts);
+        paint(fx, ts);
+      }
+    }
+
+    function play() {
+      if (!raf && !reduce.matches && !document.hidden) { last = 0; raf = requestAnimationFrame(frame); }
+    }
+    function stop() { cancelAnimationFrame(raf); raf = 0; }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return stop();
+      classic = false;
+      reseed();
+      t0 = performance.now();
+      c.clearRect(0, 0, W, H);
+      dirty.length = 0;
+      play();
+    });
+    reduce.addEventListener('change', () => {
+      if (reduce.matches) {
+        stop();
+        classic = false;
+        c.clearRect(0, 0, W, H);
+        dirty.length = 0;
+        paint(W * 0.6, 0);
+      } else play();
+    });
+    addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse') { mx = e.clientX; my = e.clientY; }
+    }, { passive: true });
+    document.documentElement.addEventListener('mouseleave', () => { mx = my = -1e4; });
+
+    let rz = 0;
+    addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(resize); }, { passive: true });
+
+    resize();
+    play();
+  }
+
+  const gc = document.getElementById('fp-grid');
+  const wc = document.getElementById('fp-wave');
+  if (gc instanceof HTMLCanvasElement && wc instanceof HTMLCanvasElement && !wc.dataset.on) {
+    wc.dataset.on = '1';
+    start(gc, wc);
+  }
+</script>
