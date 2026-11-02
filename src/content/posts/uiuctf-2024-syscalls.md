@@ -3,6 +3,7 @@ title: "UIUCTF 2024 syscalls: reading a flag around a seccomp deny-list"
 description: The filter blocks read, write, open, and execve, but openat, preadv2, and a writev argument check that inspects the wrong half of the descriptor are enough to print flag.txt.
 pubDate: 2024-07-11
 draft: false
+humanWritten: true
 ---
 Source: [github.com/Lu1sDV/ctf_writeups — UIUCTF.2K24/syscalls](https://github.com/Lu1sDV/ctf_writeups/tree/master/UIUCTF.2K24/syscalls)
 

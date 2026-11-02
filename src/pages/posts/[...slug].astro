@@ -34,12 +34,16 @@ const displayDate = new Intl.DateTimeFormat('en', {
       {post.data.draft && <p class="draft-label">Unpublished draft</p>}
       <h1>{post.data.title}</h1>
       <p class="lede">{post.data.description}</p>
-      {post.data.aiDisclosure && (
-        <aside class="ai-disclosure" aria-label="AI writing disclosure">
-          <Image class="ai-disclosure-logo" src={skillsmdRobot} alt="" width={56} height={56} loading="eager" />
+      {(post.data.aiDisclosure || post.data.humanWritten) && (
+        <aside class="authorship-disclosure" aria-label="Article authorship">
+          <Image class="authorship-disclosure-logo" src={skillsmdRobot} alt="" width={56} height={56} loading="eager" />
           <div>
-            <p class="ai-disclosure-title">AI-written / AI-edited</p>
-            <p>{post.data.aiDisclosure}</p>
+            <p class="authorship-disclosure-title">{post.data.humanWritten ? 'Entirely human-written' : 'AI-written / AI-edited'}</p>
+            {post.data.humanWritten ? (
+              <p>This writeup was written without AI-generated or AI-edited prose.</p>
+            ) : (
+              <p>{post.data.aiDisclosure}</p>
+            )}
           </div>
         </aside>
       )}

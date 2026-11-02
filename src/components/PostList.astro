@@ -43,10 +43,10 @@ const dateFormat = new Intl.DateTimeFormat('en', {
                 <span class="writing-title">
                   {post.data.title}
                   {post.data.draft && <span class="draft-label">Draft</span>}
-                  {post.data.aiDisclosure && (
-                    <span class="writing-ai-label">
+                  {(post.data.aiDisclosure || post.data.humanWritten) && (
+                    <span class="writing-authorship-label">
                       <Image src={skillsmdRobot} alt="" width={28} height={28} loading="eager" />
-                      <span>AI-written / AI-edited</span>
+                      <span>{post.data.humanWritten ? 'Entirely human-written' : 'AI-written / AI-edited'}</span>
                     </span>
                   )}
                 </span>

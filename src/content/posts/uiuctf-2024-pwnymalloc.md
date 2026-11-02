@@ -3,6 +3,7 @@ title: "UIUCTF 2024 pwnymalloc: coalescing a forged chunk over a live request"
 description: A hand-written allocator stores the free bit in the low bit of a chunk's size and reads the previous chunk's size from a footer that the neighboring payload can rewrite.
 pubDate: 2024-07-11
 draft: false
+humanWritten: true
 ---
 Source: [github.com/Lu1sDV/ctf_writeups — UIUCTF.2K24/pwnymalloc](https://github.com/Lu1sDV/ctf_writeups/tree/master/UIUCTF.2K24/pwnymalloc)
 
@@ -293,4 +294,3 @@ def main():
 if __name__ == "__main__":
     main()
 ```
-
