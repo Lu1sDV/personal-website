@@ -23,6 +23,8 @@ const {
 } = Astro.props;
 const pageTitle = title ? `${title} · ${site.title}` : site.title;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+// Article pages: no textbook-network pass, so nothing looks generated behind the prose.
+const isPost = Astro.url.pathname.includes('/posts/');
 ---
 
 <!doctype html>
@@ -66,7 +68,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
     <meta name="twitter:card" content="summary" />
   </head>
   <body>
-    <ForwardPass />
+    <ForwardPass classic={!isPost} />
     <a class="skip-link" href="#main-content">Skip to content</a>
     <Header />
     <main id="main-content" class:list={['site-main', wide && 'site-main--wide']} tabindex="-1"><slot /></main>

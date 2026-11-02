@@ -1,8 +1,14 @@
 ---
 // Animated "forward pass" dot grid: red on black, canvas only, no dependencies.
 // Most passes are free-form; about 1 in 4 draws a textbook neural network instead.
+// `classic={false}` keeps the textbook network out (reading pages); the wave always fades
+// behind the reading column so prose stays legible.
+interface Props {
+  classic?: boolean;
+}
+const { classic = true } = Astro.props;
 ---
-<div class="fp" aria-hidden="true" transition:persist>
+<div class="fp" aria-hidden="true" transition:persist data-classic={classic ? undefined : 'off'}>
   <canvas id="fp-grid"></canvas>
   <canvas id="fp-wave"></canvas>
 </div>
@@ -47,6 +53,8 @@
     const g = gc.getContext('2d')!;
     const c = wc.getContext('2d')!;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+    const root = gc.parentElement as HTMLElement;
+    const classicChance = root?.dataset.classic === 'off' ? 0 : CLASSIC_CHANCE;
 
     let W = 0, H = 0, D = 0, cols = 0, rows = 0, ox = 0, oy = 0;
     let red = '#FF2D2D';
@@ -54,6 +62,8 @@
     let mx = -1e4, my = -1e4;
     let classic = false;
     let b0 = 1, b1 = 0; // columns drawn by the free wave this frame
+    const MASK_MIN = 0.08, MASK_RAMP = 40; // reading-column attenuation
+    let mx0 = -1e9, mx1 = 1e9;             // reading-column x-range (viewport px)
     const dirty: number[] = [];
 
     // Free pass state
@@ -159,6 +169,7 @@
     }
 
     function resize() {
+      measureMask();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const nW = gc.clientWidth, nH = gc.clientHeight;
       if (!nW || (nW === W && nH === H && dpr === D)) return;
@@ -185,6 +196,36 @@
       dirty.length = 0;
       if (changed) { reseed(); if (classic) buildNet(); t0 = performance.now(); }
       if (reduce.matches) { classic = false; paint(W * 0.6, 0); }
+    }
+
+    // Reading column: the wave dims to MASK_MIN inside it and ramps back up over MASK_RAMP
+    // pixels, so moving dots never sit at full brightness behind prose.
+    function measureMask() {
+      const main = document.querySelector('.site-main');
+      if (!main) { mx0 = -1e9; mx1 = 1e9; return; }
+      const r = main.getBoundingClientRect();
+      mx0 = r.left; mx1 = r.right;
+    }
+
+    // Destination-out over the reading column: every layer dims there, dots and links alike.
+    function dimColumn() {
+      if (mx1 <= mx0) return;
+      const a = 1 - MASK_MIN;
+      c.globalAlpha = 1;
+      c.globalCompositeOperation = 'destination-out';
+      c.fillStyle = `rgba(0,0,0,${a})`;
+      c.fillRect(mx0, 0, mx1 - mx0, H);
+      const left = c.createLinearGradient(mx0 - MASK_RAMP, 0, mx0, 0);
+      left.addColorStop(0, 'rgba(0,0,0,0)');
+      left.addColorStop(1, `rgba(0,0,0,${a})`);
+      c.fillStyle = left;
+      c.fillRect(mx0 - MASK_RAMP, 0, MASK_RAMP, H);
+      const right = c.createLinearGradient(mx1, 0, mx1 + MASK_RAMP, 0);
+      right.addColorStop(0, `rgba(0,0,0,${a})`);
+      right.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = right;
+      c.fillRect(mx1, 0, MASK_RAMP, H);
+      c.globalCompositeOperation = 'source-over';
     }
 
     const colGain = (dx: number) =>
@@ -314,11 +355,12 @@
       if (classic) { b0 = 1; b1 = 0; paintNet(fx, A); }
       else paintWave(fx, ts);
       paintGlow(fx);
+      dimColumn();
       c.globalAlpha = 1;
     }
 
     function next(ts: number) {
-      classic = !classic && Math.random() < CLASSIC_CHANCE; // never two classic passes in a row
+      classic = !classic && Math.random() < classicChance; // never two classic passes in a row
       if (classic) buildNet(); else reseed();
       t0 = ts + REST;
       c.clearRect(0, 0, W, H);
