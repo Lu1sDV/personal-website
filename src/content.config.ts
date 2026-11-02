@@ -9,6 +9,7 @@ const posts = defineCollection({
     description: z.string().trim().min(1),
     pubDate: z.coerce.date(),
     draft: z.boolean(),
+    aiDisclosure: z.string().trim().min(1).optional(),
   }),
 });
 

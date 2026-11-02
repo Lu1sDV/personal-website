@@ -1,5 +1,7 @@
 ---
 import type { BlogPost } from '../lib/posts';
+import { Image } from 'astro:assets';
+import skillsmdRobot from '../assets/skillsmd.png';
 import { withBase } from '../lib/urls';
 
 interface Props {
@@ -41,6 +43,12 @@ const dateFormat = new Intl.DateTimeFormat('en', {
                 <span class="writing-title">
                   {post.data.title}
                   {post.data.draft && <span class="draft-label">Draft</span>}
+                  {post.data.aiDisclosure && (
+                    <span class="writing-ai-label">
+                      <Image src={skillsmdRobot} alt="" width={28} height={28} loading="eager" />
+                      <span>AI-written / AI-edited</span>
+                    </span>
+                  )}
                 </span>
                 <time datetime={post.data.pubDate.toISOString()}>{dateFormat.format(post.data.pubDate)}</time>
               </a>

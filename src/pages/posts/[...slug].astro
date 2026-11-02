@@ -1,6 +1,8 @@
 ---
 import type { GetStaticPaths } from 'astro';
 import { render } from 'astro:content';
+import { Image } from 'astro:assets';
+import skillsmdRobot from '../../assets/skillsmd.png';
 import Base from '../../layouts/Base.astro';
 import { getPosts, readingTime, type BlogPost } from '../../lib/posts';
 import { withBase } from '../../lib/urls';
@@ -32,6 +34,15 @@ const displayDate = new Intl.DateTimeFormat('en', {
       {post.data.draft && <p class="draft-label">Unpublished draft</p>}
       <h1>{post.data.title}</h1>
       <p class="lede">{post.data.description}</p>
+      {post.data.aiDisclosure && (
+        <aside class="ai-disclosure" aria-label="AI writing disclosure">
+          <Image class="ai-disclosure-logo" src={skillsmdRobot} alt="" width={56} height={56} loading="eager" />
+          <div>
+            <p class="ai-disclosure-title">AI-written / AI-edited</p>
+            <p>{post.data.aiDisclosure}</p>
+          </div>
+        </aside>
+      )}
       <p class="post-meta">
         <time datetime={publishedTime}>{displayDate}</time>
         <span aria-hidden="true">·</span>
